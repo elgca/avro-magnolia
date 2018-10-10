@@ -1,4 +1,4 @@
-package org.elgca.avro.schema
+package elgca.avro.schema
 
 import scala.collection.mutable.ListBuffer
 

@@ -20,7 +20,8 @@ lazy val root = (project in file(".")).
         "com.propensive" %% "magnolia" % "0.9.1",
         "com.propensive" %% "mercator" % "0.1.1",
         "org.yaml" % "snakeyaml" % "1.23",
-        "org.apache.avro" % "avro" % "1.8.2"
+        "org.apache.avro" % "avro" % "1.8.2",
+        "com.sksamuel.avro4s" %% "avro4s-core" % "2.0.1"
       )
     }
   )

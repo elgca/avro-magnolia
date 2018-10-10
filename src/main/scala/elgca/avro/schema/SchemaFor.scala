@@ -1,48 +1,57 @@
-package org.elgca.avro.schema
+package elgca.avro.schema
 
-import org.apache.avro.{Schema, SchemaBuilder}
-import magnolia._
-
-import scala.language.experimental.macros
 import java.util.{UUID, List => JList, Map => JMap}
 
-import org.elgca.avro.Util.schema
+import magnolia._
+import org.apache.avro.{Schema, SchemaBuilder}
 
 import scala.collection.JavaConverters._
+import scala.language.experimental.macros
 
 trait SchemaFor[T] extends Serializable {
   self =>
 
-  def schema: Schema
+  def schema(implicit info: AnnotationInfo = AnnotationInfo.Empty): Schema
 
-  def map[U](fn: Schema => Schema): SchemaFor[U] = new SchemaFor[U] {
-    override def schema: Schema = fn(self.schema)
-  }
+  def write(t: T): Either[Record, AnyRef]
 }
 
-object SchemaFor {
+object SchemaFor extends SchemaForHelper {
   type Typeclass[T] = SchemaFor[T]
 
-  def combine[T](caseClass: CaseClass[Typeclass, T]): Typeclass[T] = new Typeclass[T] {
-    override def schema: Schema = {
+  def combine[T](caseClass: CaseClass[Typeclass, T])
+                (implicit namingStrategy: NamingStrategy = DefaultNamingStrategy): Typeclass[T] = new Typeclass[T] {
+    self =>
+    override def schema(implicit info: AnnotationInfo): Schema = {
       if (caseClass.isObject || caseClass.isValueClass) {
         SchemaBuilder.enumeration(caseClass.typeName.short).namespace(caseClass.typeName.owner)
           .symbols(caseClass.typeName.short)
       } else {
-        val typeName = caseClass.typeName
+        //sub field parser
         val fields = caseClass.parameters.map { p =>
-          newField(p.label, p.typeclass.schema, null, p.default.orNull)
+          implicit val info = AnnotationInfo(p.annotations)
+          newField(p.label, p.typeclass.schema, info, p.default)
         }.filter(_.schema() != null)
-        val record = Schema.createRecord(typeName.short, null,
-          typeName.owner, false)
+
+        val typeName = caseClass.typeName
+        val info = AnnotationInfo(caseClass.annotations)
+        val record = Schema.createRecord(
+          namingStrategy.to(info.name.getOrElse(typeName.short)),
+          info.doc.orNull,
+          info.namespace.getOrElse(typeName.owner),
+          false
+        )
         record.setFields(fields.asJava)
         record
       }
     }
+
+    override def write(t: T): Either[Record, AnyRef] = ???
   }
 
   def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = new Typeclass[T] {
-    override def schema: Schema = {
+    self =>
+    override def schema(implicit info: AnnotationInfo): Schema = {
       val schemas = sealedTrait.subtypes.map(_.typeclass.schema)
       val doc: String = null
       val typeName = sealedTrait.typeName
@@ -50,22 +59,50 @@ object SchemaFor {
         val list = schemas.flatMap(_.getEnumSymbols.asScala)
         SchemaBuilder.enumeration(typeName.short).namespace(typeName.owner)
           .symbols(list: _*)
-      } else throw new RuntimeException("not support yet")
+      } else {
+        createSafeUnion(schemas: _*)
+      }
     }
+
+    override def write(t: T): Either[Record, AnyRef] = ???
   }
 
   implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
 
-  def newField(name: String, schema: Schema, doc: String, default: Any): Schema.Field = {
-    new Schema.Field(DefaultNamingStrategy.to(name),
+  def newField(name: String, schema: Schema, info: AnnotationInfo, default: Any)
+              (implicit namingStrategy: NamingStrategy): Schema.Field = {
+    val field = new Schema.Field(namingStrategy.to(info.name.getOrElse(name)),
       schema,
-      doc,
+      info.doc.orNull,
       resolveDefault(default))
+    info.aliases.foreach(field.addAlias)
+    info.props.foreach(x => field.addProp(x._1, x._2))
+    field
+  }
+
+  def overrideNamespace(schema: Schema, namespace: String): Schema = {
+    schema.getType match {
+      case Schema.Type.RECORD =>
+        val fields = schema.getFields.asScala.map { field =>
+          new Schema.Field(field.name(), overrideNamespace(field.schema(), namespace), field.doc, field.defaultVal, field.order)
+        }
+        val copy = Schema.createRecord(schema.getName, schema.getDoc, namespace, schema.isError, fields.asJava)
+        schema.getAliases.asScala.foreach(copy.addAlias)
+        schema.getObjectProps.asScala.foreach { case (k, v) => copy.addProp(k, v) }
+        copy
+      case Schema.Type.UNION => Schema.createUnion(schema.getTypes.asScala.map(overrideNamespace(_, namespace)).asJava)
+      case Schema.Type.ENUM => Schema.createEnum(schema.getName, schema.getDoc, namespace, schema.getEnumSymbols)
+      case Schema.Type.FIXED => Schema.createFixed(schema.getName, schema.getDoc, namespace, schema.getFixedSize)
+      case Schema.Type.MAP => Schema.createMap(overrideNamespace(schema.getValueType, namespace))
+      case Schema.Type.ARRAY => Schema.createArray(overrideNamespace(schema.getElementType, namespace))
+      case _ => schema
+    }
   }
 
   private def resolveDefault(default: Any): AnyRef = {
     default match {
       case null => null
+      case None => null
       case uuid: UUID => uuid.toString
       case bd: BigDecimal => java.lang.Double.valueOf(bd.underlying.doubleValue)
       case Some(value) => resolveDefault(value)
