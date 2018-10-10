@@ -1,2 +1,2 @@
 # avro-magnolia
-a avro libraryby magnolia
+a avro library by magnolia
