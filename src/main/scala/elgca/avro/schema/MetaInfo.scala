@@ -1,6 +1,15 @@
 package elgca.avro.schema
 
-class AnnotationInfo(val annos: Seq[AvroAnnotation]) {
+class MetaInfo(val annos: Seq[AvroAnnotation]) {
+  def map(f: PartialFunction[AvroAnnotation, AvroAnnotation]): MetaInfo = {
+    if (annos.isEmpty || annos.forall(f.isDefinedAt)) this
+    else new MetaInfo(annos.map { x => f.applyOrElse(x, identity[AvroAnnotation]) })
+  }
+
+  def append(anno: AvroAnnotation*): MetaInfo = {
+    new MetaInfo(annos ++ anno)
+  }
+
   lazy val namespace: Option[String] = {
     annos.find(_.isInstanceOf[AvroNamespace])
       .map(_.asInstanceOf[AvroNamespace].namespace)
@@ -38,10 +47,11 @@ class AnnotationInfo(val annos: Seq[AvroAnnotation]) {
   }
 }
 
-object AnnotationInfo {
-  def apply(annos: Seq[Any])(implicit default: AvroDecimalMode = AvroDecimalMode.default): AnnotationInfo = {
-    new AnnotationInfo((annos :+ default).filter(_.isInstanceOf[AvroAnnotation]).map(_.asInstanceOf[AvroAnnotation]))
+object MetaInfo {
+  def apply(annos: Seq[Any])(implicit default: MetaInfo): MetaInfo = {
+      val ann = annos.filter(_.isInstanceOf[AvroAnnotation]).map(_.asInstanceOf[AvroAnnotation])
+      new MetaInfo(ann ++ default.decimalMode)
   }
 
-  def Empty(implicit default: AvroDecimalMode = AvroDecimalMode.default) = apply(Nil)
+  def Empty = new MetaInfo(Nil)
 }

@@ -21,11 +21,13 @@ case class Woman(sex:String,manko:String) extends Human
 
 case class Sub(name: String, sugar: Map[String,String], fat: Operate)
 
+@AvroName("hello")
 case class TestClass(name: (Int,Double),
+                     @AvroDecimalMode(38,10)
+                     either: Either[BigDecimal,String],
                      opt: Human,
                      binary: List[Byte],
                      Subs: Vector[Sub],
-                     either: Either[Sub,String],
                      vegan: Date,
                      colorEnum: ColorEnum,
                      @AvroDecimalMode(38,10)
@@ -35,11 +37,14 @@ object SchemaForTest extends App {
 
   import SchemaFor._
   implicit val naming = SnakeCase
-  val schema = gen[TestClass].schema
+  val gens = gen[TestClass]
+  implicit val empty = MetaInfo.Empty
+  val schema = gens.schema
   println(schema)
   val schema2 = new Schema.Parser().parse(
-    schema.toString
+    gens.schema.toString
   )
+
   new GenericData.Record(schema)
   println(schema2)
   println(schema.toString == schema2.toString)
