@@ -49,7 +49,10 @@ class MetaInfo(val annos: Seq[AvroAnnotation]) {
 
 object MetaInfo {
   def apply(annos: Seq[Any])(implicit default: MetaInfo): MetaInfo = {
-      val ann = annos.filter(_.isInstanceOf[AvroAnnotation]).map(_.asInstanceOf[AvroAnnotation])
+    val ann = annos.filter(_.isInstanceOf[AvroAnnotation]).map(_.asInstanceOf[AvroAnnotation])
+    if (ann.exists(_.isInstanceOf[AvroDecimalMode]))
+      new MetaInfo(ann)
+    else
       new MetaInfo(ann ++ default.decimalMode)
   }
 
