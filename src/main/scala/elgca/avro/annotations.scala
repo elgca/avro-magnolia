@@ -1,12 +1,11 @@
-package elgca.avro.schema
+package elgca.avro
 
 import scala.annotation.StaticAnnotation
-import scala.math.BigDecimal.RoundingMode.{RoundingMode, UNNECESSARY}
+import scala.math.BigDecimal.RoundingMode.{RoundingMode, _}
 
 sealed trait AvroAnnotation extends StaticAnnotation
 
 case class AvroAlias(alias: String) extends AvroAnnotation
-
 case class AvroDoc(doc: String) extends AvroAnnotation
 
 /**
@@ -38,8 +37,8 @@ case class AvroProp(name: String, value: String) extends AvroAnnotation
   * @param scale
   * @param roundingMode
   */
-case class AvroDecimalMode(precision: Int, scale: Int, roundingMode: RoundingMode = UNNECESSARY) extends AvroAnnotation
+case class AvroDecimalMode(precision: Int, scale: Int, roundingMode: RoundingMode = HALF_UP) extends AvroAnnotation
 
-object AvroDecimalMode {
-  val default = AvroDecimalMode(8, 2)
+trait AvroDecimalModeImplicit {
+  implicit val default = AvroDecimalMode(8, 2)
 }

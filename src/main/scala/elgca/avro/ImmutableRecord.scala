@@ -1,9 +1,9 @@
-package elgca.avro.schema
+package elgca.avro
 
-
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.specific.SpecificRecord
+
+import scala.collection.JavaConverters._
 
 /**
   * An implementation of org.apache.avro.generic.GenericContainer that is both a
@@ -12,9 +12,14 @@ import org.apache.avro.specific.SpecificRecord
 trait Record extends GenericRecord with SpecificRecord
 
 trait ImmutableRecord extends Record {
+  self =>
   override def put(key: String, v: scala.Any): Unit = throw new UnsupportedOperationException("This implementation of Record is immutable")
 
   override def put(i: Int, v: scala.Any): Unit = throw new UnsupportedOperationException("This implementation of Record is immutable")
+
+  override def toString: String = {
+    s"""${self.getSchema.getFields.asScala.map(x => x.name() + " : " + self.get(x.name())).mkString("{",", ","}")}"""
+  }
 }
 
 
